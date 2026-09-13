@@ -1,0 +1,28 @@
+on:
+  push:
+    branches: [ "main", "master" ]
+  pull_request:
+    branches: [ "main", "master" ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    container: vitasdk/vitasdk:latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Build plugin
+        run: |
+          mkdir build
+          cd build
+          cmake ..
+          make
+
+      - name: Upload compiled plugin
+        uses: actions/upload-artifact@v4
+        with:
+          name: vita-plugin-suprx
+          path: build/*.suprx
