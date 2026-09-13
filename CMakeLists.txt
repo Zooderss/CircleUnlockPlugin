@@ -19,5 +19,5 @@ target_link_libraries(circle_unlock
 # Generate the .suprx binary directly using circle_unlock.yml
 vita_create_self(circle_unlock.suprx circle_unlock
   UNCOMPRESSED
-  CONFIG circle_unlock.yml
+  CONFIG circle_unlock.yaml
 )
