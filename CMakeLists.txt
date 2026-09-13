@@ -1,13 +1,15 @@
-cmake_minimum_required(VERSION 3.10)
-project(CircleUnlock C)
+cmake_minimum_required(VERSION 3.16)
 
 if(NOT DEFINED ENV{VITASDK})
-    message(FATAL_ERROR "VITASDK environment variable is not set. Please install VitaSDK and export VITASDK path.")
+    message(FATAL_ERROR "VITASDK environment variable is not set.")
 endif()
 
+set(CMAKE_TOOLCHAIN_FILE "$ENV{VITASDK}/share/vita.toolchain.cmake" CACHE PATH "VitaSDK Toolchain")
 include("$ENV{VITASDK}/share/vita.cmake" REQUIRED)
 
-set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wall -O2 -Wno-unused-variable")
+project(CircleUnlock C)
+
+set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wall -O2")
 
 add_library(circle_unlock SHARED main.c)
 
@@ -18,5 +20,5 @@ target_link_libraries(circle_unlock
     taihen_stub
 )
 
-vita_create_stubs(circle_unlock circle_unlock)
-vita_create_prx(circle_unlock.suprx circle_unlock)
+# Convert compiled target into circle_unlock.suprx
+vita_create_self(circle_unlock.suprx circle_unlock)
