@@ -1,74 +1,76 @@
-#include <vitasdk.h>
+#include <psp2/kernel/threadmgr.h>
+#include <psp2/kernel/proc[span_35](start_span)[span_35](end_span)essmgr.h>
+#include <psp2/ctrl.h>
+#include <psp2/shellutil.h>
 #include <taihen.h>
-#include <stdbool.h>
+#include <string.h>
 
-static tai_hook_ref_t g_ctrl_hook_ref;
-static SceUID g_ctrl_hook_id = -1;
+#define PLUGIN_NAME "CircleUnlock"
+#define HOLD_THRESHOLD_TICKS 60
+#define THREAD_LOOP_DELAY_US 16000
 
-#define HOLD_THRESHOLD_FRAMES 30
-static uint32_t g_circle_hold_counter = 0;
-static bool g_unlock_triggered = false;
+SCE_MODULE_INFO(CircleUnlock, 0, 1, 1);
 
-extern int sceShellUtilLockScreenDismiss(void);
+static SceUID g_worker_thread_id = -1;
+static int g_running = 0;
 
-// Define function pointer type matching sceCtrlPeekBufferPositive
-typedef int (*SceCtrlPeekBufferFunc)(int port, SceCtrlData *pad_data, int count);
+static int unlock_worker_thread(SceSize args, void *argp) {
+    SceCtrlData pad;
+    unsigned int hold_counter = 0;
+    int unlock_triggered = 0;
 
-// Internal taiHEN structure layout to safely invoke hooks with arguments on modern GCC
-typedef struct _my_tai_hook_user {
-    uintptr_t next;
-    void *func;
-    void *old;
-} _my_tai_hook_user;
+    sceCtrlSetSamplingMode(SCE_CTRL_MODE_DIGITAL);
 
-// Typed continuation macro bypassing strict empty-parameter casting issues in GCC 15
-#define SAFE_TAI_CONTINUE(func_type, hook, ...) ({ \
-    _my_tai_hook_user *cur, *next; \
-    cur = (_my_tai_hook_user *)(hook); \
-    next = (_my_tai_hook_user *)cur->next; \
-    (next == NULL) ? \
-        ((func_type)(cur->old))(__VA_ARGS__) \
-        : \
-        ((func_type)(next->func))(__VA_ARGS__); \
-})
-
-// Hooked controller read function
-static int sceCtrlPeekBufferPositive_patched(int port, SceCtrlData *pad_data, int count) {
-    // Call the original function safely using our typed continuation macro
-    int ret = SAFE_TAI_CONTINUE(SceCtrlPeekBufferFunc, g_ctrl_hook_ref, port, pad_data, count);
-
-    if (ret >= 0 && pad_data != NULL && count > 0) {
-        if (pad_data->buttons & SCE_CTRL_CIRCLE) {
-            g_circle_hold_counter++;
-
-            if (g_circle_hold_counter >= HOLD_THRESHOLD_FRAMES && !g_unlock_triggered) {
-                sceShellUtilLockScreenDismiss();
-                g_unlock_triggered = true;
+    while (g_running) {
+        int ret = sceCtrlPeekBufferPositive(0, &pad, 1);
+        
+        if (ret >= 0) {
+            if (pad.buttons & SCE_CTRL_CIRCLE) {
+                hold_counter++;
+                
+                if (hold_counter >= HOLD_THRESHOLD_TICKS && !unlock_triggered) {
+                    sceShellUtilUnlock(1);
+                    unlock_triggered = 1;
+                }
+            } else {
+                hold_counter = 0;
+                unlock_triggered = 0;
             }
-        } else {
-            g_circle_hold_counter = 0;
-            g_unlock_triggered = false;
         }
+
+        sceKernelDelayThread(THREAD_LOOP_DELAY_US);
     }
 
-    return ret;
+    return 0;
 }
 
-int module_start(SceSize argc, const void *argv) {
-    g_ctrl_hook_id = taiHookFunctionImport(
-        &g_ctrl_hook_ref,
-        TAI_MAIN_MODULE,
-        0xD197E3C7, // SceCtrl NID
-        0x67E9ED85, // sceCtrlPeekBufferPositive NID
-        sceCtrlPeekBufferPositive_patched
+int module_start(SceSize args, const void *argp) {
+    g_running = 1;
+
+    g_worker_thread_id = sceKernelCreateThread(
+        "CircleUnlockWorker",
+        unlock_worker_thread,
+        0x10000100,
+        0x4000,
+        0,
+        0,
+        NULL
     );
 
+    if (g_worker_thread_id >= 0) {
+        sceKernelStartThread(g_worker_thread_id, 0, NULL);
+    }
+
     return SCE_KERNEL_START_SUCCESS;
 }
 
-int module_stop(SceSize argc, const void *argv) {
-    if (g_ctrl_hook_id >= 0) {
-        taiHookRelease(g_ctrl_hook_id, g_ctrl_hook_ref);
+int module_stop(SceSize args, const void *argp) {
+    g_running = 0;
+
+    if (g_worker_thread_id >= 0) {
+        sceKernelWaitThreadEnd(g_worker_thread_id, NULL, NULL);
+        sceKernelDeleteThread(g_worker_thread_id);
     }
-    return SCE_KERNEL_START_SUCCESS;
+
+    return SCE_KERNEL_STOP_SUCCESS;
 }
