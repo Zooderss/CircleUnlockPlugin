@@ -1,3 +1,5 @@
+name: Build Vita Plugin
+
 on:
   push:
     branches: [ "main", "master" ]
