@@ -11,8 +11,13 @@ static bool g_unlock_triggered = false;
 
 extern int sceShellUtilLockScreenDismiss(void);
 
+// Define function pointer type matching sceCtrlPeekBufferPositive
+typedef int (*SceCtrlPeekBufferFunc)(int port, SceCtrlData *pad_data, int count);
+
+// Hooked controller read function
 static int sceCtrlPeekBufferPositive_patched(int port, SceCtrlData *pad_data, int count) {
-    int ret = TAI_CONTINUE(int, g_ctrl_hook_ref, port, pad_data, count);
+    // Correctly invoke TAI_CONTINUE using the function pointer type signature
+    int ret = TAI_CONTINUE(SceCtrlPeekBufferFunc, g_ctrl_hook_ref, port, pad_data, count);
 
     if (ret >= 0 && pad_data != NULL && count > 0) {
         if (pad_data->buttons & SCE_CTRL_CIRCLE) {
@@ -31,13 +36,12 @@ static int sceCtrlPeekBufferPositive_patched(int port, SceCtrlData *pad_data, in
     return ret;
 }
 
-void _start() __attribute__((weak, alias("module_start")));
 int module_start(SceSize argc, const void *argv) {
     g_ctrl_hook_id = taiHookFunctionImport(
         &g_ctrl_hook_ref,
         TAI_MAIN_MODULE,
-        0xD197E3C7,
-        0x67E9ED85,
+        0xD197E3C7, // SceCtrl NID
+        0x67E9ED85, // sceCtrlPeekBufferPositive NID
         sceCtrlPeekBufferPositive_patched
     );
 
