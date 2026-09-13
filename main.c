@@ -14,10 +14,28 @@ extern int sceShellUtilLockScreenDismiss(void);
 // Define function pointer type matching sceCtrlPeekBufferPositive
 typedef int (*SceCtrlPeekBufferFunc)(int port, SceCtrlData *pad_data, int count);
 
+// Internal taiHEN structure layout to safely invoke hooks with arguments on modern GCC
+typedef struct _my_tai_hook_user {
+    uintptr_t next;
+    void *func;
+    void *old;
+} _my_tai_hook_user;
+
+// Typed continuation macro bypassing strict empty-parameter casting issues in GCC 15
+#define SAFE_TAI_CONTINUE(func_type, hook, ...) ({ \
+    _my_tai_hook_user *cur, *next; \
+    cur = (_my_tai_hook_user *)(hook); \
+    next = (_my_tai_hook_user *)cur->next; \
+    (next == NULL) ? \
+        ((func_type)(cur->old))(__VA_ARGS__) \
+        : \
+        ((func_type)(next->func))(__VA_ARGS__); \
+})
+
 // Hooked controller read function
 static int sceCtrlPeekBufferPositive_patched(int port, SceCtrlData *pad_data, int count) {
-    // Correctly invoke TAI_CONTINUE using the function pointer type signature
-    int ret = TAI_CONTINUE(SceCtrlPeekBufferFunc, g_ctrl_hook_ref, port, pad_data, count);
+    // Call the original function safely using our typed continuation macro
+    int ret = SAFE_TAI_CONTINUE(SceCtrlPeekBufferFunc, g_ctrl_hook_ref, port, pad_data, count);
 
     if (ret >= 0 && pad_data != NULL && count > 0) {
         if (pad_data->buttons & SCE_CTRL_CIRCLE) {
@@ -52,5 +70,5 @@ int module_stop(SceSize argc, const void *argv) {
     if (g_ctrl_hook_id >= 0) {
         taiHookRelease(g_ctrl_hook_id, g_ctrl_hook_ref);
     }
-    return SCE_KERNEL_STOP_SUCCESS;
+    return SCE_KERNEL_START_SUCCESS;
 }
