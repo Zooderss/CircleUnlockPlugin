@@ -8,8 +8,14 @@ if(NOT DEFINED CMAKE_TOOLCHAIN_FILE)
     endif()
 endif()
 
-project(circle_unlock)
+project(circle_unlock C)
 include("${VITASDK}/share/vita.cmake" REQUIRED)
+
+# taiHEN's TAI_CONTINUE macro relies on pre-C23 semantics for unprototyped
+# function pointers ("()" meaning unspecified args, not zero args). Newer
+# GCC defaults to C23, which breaks it, so pin an older standard here.
+set(CMAKE_C_STANDARD 11)
+add_compile_options(-std=gnu11)
 
 set(VITA_APP_NAME "Circle Unlock")
 set(VITA_TITLEID  "CIRCUNLK1")
