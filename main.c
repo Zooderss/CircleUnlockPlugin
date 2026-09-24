@@ -22,7 +22,6 @@
 #include <psp2/kernel/threadmgr.h>
 #include <psp2/ctrl.h>
 #include <psp2/touch.h>
-#include <psp2/moduleinfo.h>
 #include <taihen.h>
 #include <string.h>
 
