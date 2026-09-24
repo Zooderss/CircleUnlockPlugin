@@ -1,0 +1,9 @@
+main_module:
+  modname: circle_unlock
+  libraries:
+    circle_unlock_export:
+      kernel: false
+      nid: 0xBEEF0001
+      functions:
+        - module_start
+        - module_stop
