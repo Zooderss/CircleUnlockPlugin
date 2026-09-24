@@ -90,6 +90,12 @@ static int touch_peek_patched(int port, SceTouchData *pData, int nBufs) {
     return ret;
 }
 
+/* crt0.o expects a `main` symbol to exist even though it's never actually
+ * called for a plugin — taiHEN invokes module_start below instead. */
+int main(void) {
+    return 0;
+}
+
 int module_start(SceSize argc, const void *args) {
     (void)argc;
     (void)args;
